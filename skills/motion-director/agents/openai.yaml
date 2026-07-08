@@ -1,0 +1,7 @@
+interface:
+  display_name: "Motion Director"
+  short_description: "Cinematic launch films from real product screens."
+  default_prompt: "Use $motion-director to generate a cinematic launch film from this product repo and real screen captures."
+
+policy:
+  allow_implicit_invocation: true

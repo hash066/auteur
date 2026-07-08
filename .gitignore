@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+jobs/*
+!jobs/.gitkeep
+artifacts/
+captures/*
+!captures/.gitkeep
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
+.DS_Store
+Thumbs.db

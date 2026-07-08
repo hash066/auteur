@@ -1,0 +1,32 @@
+{
+  "name": "motion-director",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-ready cinematic product launch film engine: skill, MCP server, API, Playwright capture, audio analysis, and Remotion renderer.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm --workspace @motion-director/core run build && npm --workspace @motion-director/audio-analysis run build && npm --workspace @motion-director/capture-playwright run build && npm --workspace @motion-director/renderer-remotion run build && npm --workspace @motion-director/mcp-server run build && npm --workspace @motion-director/api run build && npm --workspace @motion-director/studio run build",
+    "dev:api": "npm --workspace @motion-director/api run dev",
+    "dev:studio": "npm --workspace @motion-director/studio run dev",
+    "smoke": "npm --workspace @motion-director/core run smoke",
+    "start:api": "npm --workspace @motion-director/api start",
+    "start:mcp": "npm --workspace @motion-director/mcp-server start"
+  },
+  "keywords": [
+    "motion-design",
+    "launch-video",
+    "mcp",
+    "remotion",
+    "playwright",
+    "agent-skill"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "typescript": "^5.7.2"
+  }
+}

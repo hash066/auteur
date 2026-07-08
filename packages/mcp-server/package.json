@@ -1,0 +1,20 @@
+{
+  "name": "@motion-director/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "motion-director-mcp": "dist/server.js"
+  },
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@motion-director/audio-analysis": "0.1.0",
+    "@motion-director/core": "0.1.0",
+    "zod": "^3.24.1"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "productName": "Cerberus",
+  "repoPath": "E:/10w10p/Cerberus",
+  "durationSeconds": 28,
+  "vibe": "mysterious premium tech, fast beat cuts, real screen motion",
+  "referenceStyle": "Cursorful-like focal zooms with side callouts",
+  "captures": [
+    "examples/cerberus/captures/overview.png",
+    "examples/cerberus/captures/devices.png",
+    "examples/cerberus/captures/audio.png",
+    "examples/cerberus/captures/workloads.png",
+    "examples/cerberus/captures/metrics.png",
+    "examples/cerberus/captures/wallet.png",
+    "examples/cerberus/captures/conflicts.png"
+  ],
+  "audio": {
+    "provider": "auto"
+  },
+  "render": false,
+  "renderProfile": "manifest-first",
+  "outputName": "cerberus-launch.mp4"
+}

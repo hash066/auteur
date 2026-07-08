@@ -1,0 +1,19 @@
+{
+  "name": "@motion-director/renderer-remotion",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@motion-director/core": "0.1.0",
+    "@remotion/renderer": "^4.0.484",
+    "react": "^19.0.0",
+    "remotion": "^4.0.484"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0"
+  }
+}
