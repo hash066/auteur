@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildStoryboard, tiers, type MotionDirectorRequest } from "@motion-director/core";
@@ -39,6 +39,122 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
 
     if (req.method === "GET" && url.pathname === "/api/v1/tiers") {
       sendJson(res, 200, { tiers });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/v1/auth/google/start") {
+      const clientId = process.env.AUTH_GOOGLE_ID;
+      const clientSecret = process.env.AUTH_GOOGLE_SECRET;
+      const authSecret = process.env.AUTH_SECRET;
+      if (!clientId || !clientSecret || !authSecret) {
+        sendJson(res, 500, { error: "google auth is not configured" });
+        return;
+      }
+      const state = randomBytes(24).toString("base64url");
+      const origin = requestOrigin(req);
+      const redirectUri = googleRedirectUri(req);
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", "openid email profile");
+      authUrl.searchParams.set("state", state);
+      authUrl.searchParams.set("access_type", "offline");
+      authUrl.searchParams.set("prompt", "consent");
+      setCookie(res, "md_oauth_state", state, {
+        httpOnly: true,
+        secure: origin.startsWith("https://"),
+        sameSite: "Lax",
+        maxAgeSeconds: 600
+      });
+      redirect(res, authUrl.toString());
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/v1/auth/google/callback") {
+      const authSecret = process.env.AUTH_SECRET;
+      const state = url.searchParams.get("state") ?? "";
+      const code = url.searchParams.get("code") ?? "";
+      const error = url.searchParams.get("error");
+      if (error) {
+        redirect(res, "/?auth=error");
+        return;
+      }
+      if (!authSecret) {
+        redirect(res, "/?auth=config");
+        return;
+      }
+      const cookies = parseCookies(req.headers.cookie);
+      const expectedState = cookies.md_oauth_state ?? "";
+      if (!state || !expectedState || state !== expectedState || !code) {
+        clearCookie(res, "md_oauth_state");
+        redirect(res, "/?auth=state");
+        return;
+      }
+
+      const token = await exchangeGoogleCode(req, code);
+      const profile = await loadGoogleProfile(token.access_token);
+      if (!profile.email) {
+        clearCookie(res, "md_oauth_state");
+        redirect(res, "/?auth=email");
+        return;
+      }
+      const signup = upsertSignup(profile.email.toLowerCase(), profile.name || profile.email.split("@")[0] || "Motion user");
+      const sessionToken = createSessionToken({
+        email: signup.email,
+        name: signup.name
+      }, authSecret);
+      setCookie(res, "md_session", sessionToken, {
+        httpOnly: true,
+        secure: requestOrigin(req).startsWith("https://"),
+        sameSite: "Lax",
+        maxAgeSeconds: 60 * 60 * 24 * 30
+      });
+      clearCookie(res, "md_oauth_state");
+      redirect(res, "/?auth=ok");
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/v1/auth/session") {
+      const authSecret = process.env.AUTH_SECRET;
+      if (!authSecret) {
+        sendJson(res, 200, { signedIn: false, configured: false });
+        return;
+      }
+      const cookies = parseCookies(req.headers.cookie);
+      const token = cookies.md_session;
+      if (!token) {
+        sendJson(res, 200, { signedIn: false, configured: true });
+        return;
+      }
+      const session = readSessionToken(token, authSecret);
+      if (!session) {
+        sendJson(res, 200, { signedIn: false, configured: true });
+        return;
+      }
+      const users = readUsers();
+      const user = users.find((item) => item.email === session.email);
+      if (!user) {
+        sendJson(res, 200, { signedIn: false, configured: true });
+        return;
+      }
+      sendJson(res, 200, {
+        signedIn: true,
+        configured: true,
+        user: {
+          email: user.email,
+          name: user.name,
+          status: user.status,
+          waitlistNumber: user.waitlistNumber
+        },
+        message: user.status === "waitlisted" ? waitlistMessage(user.waitlistNumber ?? 1) : "You are in. Go make something loud."
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/v1/auth/logout") {
+      clearCookie(res, "md_session");
+      sendJson(res, 200, { ok: true });
       return;
     }
 
@@ -292,6 +408,40 @@ function waitlistMessage(number: number): string {
   return `You are #${number} on the waitlist. welp im broke and solo, so im letting people in slowly.`;
 }
 
+interface SessionPayload {
+  email: string;
+  name: string;
+  exp: number;
+}
+
+function createSessionToken(payload: { email: string; name: string }, secret: string): string {
+  const session: SessionPayload = {
+    email: payload.email,
+    name: payload.name,
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 30
+  };
+  const encoded = Buffer.from(JSON.stringify(session)).toString("base64url");
+  const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function readSessionToken(token: string, secret: string): SessionPayload | null {
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return null;
+  const expected = createHmac("sha256", secret).update(encoded).digest("base64url");
+  const signatureBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expected);
+  if (signatureBytes.length !== expectedBytes.length) return null;
+  if (!timingSafeEqual(signatureBytes, expectedBytes)) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SessionPayload;
+    if (!decoded.email || decoded.exp < Date.now()) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
@@ -325,4 +475,112 @@ function serveStatic(res: ServerResponse, pathname: string): void {
   const data = readFileSync(file);
   res.writeHead(200, { "Content-Type": types[extname(file)] ?? "application/octet-stream" });
   res.end(data);
+}
+
+function requestOrigin(req: IncomingMessage): string {
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined) || "http";
+  const hostHeader = (req.headers["x-forwarded-host"] as string | undefined) || req.headers.host || "localhost:3000";
+  return `${proto}://${hostHeader}`;
+}
+
+function googleRedirectUri(req: IncomingMessage): string {
+  return `${requestOrigin(req)}/api/v1/auth/google/callback`;
+}
+
+interface GoogleTokenResponse {
+  access_token: string;
+}
+
+async function exchangeGoogleCode(req: IncomingMessage, code: string): Promise<GoogleTokenResponse> {
+  const clientId = process.env.AUTH_GOOGLE_ID;
+  const clientSecret = process.env.AUTH_GOOGLE_SECRET;
+  if (!clientId || !clientSecret) throw new Error("google auth is not configured");
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: googleRedirectUri(req),
+      grant_type: "authorization_code"
+    })
+  });
+  const json = await response.json() as GoogleTokenResponse & { error?: string };
+  if (!response.ok || !json.access_token) {
+    throw new Error(json.error || "google token exchange failed");
+  }
+  return { access_token: json.access_token };
+}
+
+interface GoogleProfile {
+  email?: string;
+  name?: string;
+}
+
+async function loadGoogleProfile(accessToken: string): Promise<GoogleProfile> {
+  const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  const json = await response.json() as GoogleProfile;
+  if (!response.ok) throw new Error("google profile fetch failed");
+  return json;
+}
+
+interface CookieOptions {
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Lax" | "Strict" | "None";
+  path?: string;
+  maxAgeSeconds?: number;
+}
+
+function setCookie(res: ServerResponse, name: string, value: string, options: CookieOptions = {}): void {
+  const path = options.path || "/";
+  const sameSite = options.sameSite || "Lax";
+  const parts = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, `SameSite=${sameSite}`];
+  if (typeof options.maxAgeSeconds === "number") parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAgeSeconds))}`);
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure) parts.push("Secure");
+  appendSetCookie(res, parts.join("; "));
+}
+
+function clearCookie(res: ServerResponse, name: string): void {
+  setCookie(res, name, "", { maxAgeSeconds: 0, path: "/" });
+}
+
+function appendSetCookie(res: ServerResponse, cookie: string): void {
+  const current = res.getHeader("Set-Cookie");
+  if (!current) {
+    res.setHeader("Set-Cookie", cookie);
+    return;
+  }
+  if (Array.isArray(current)) {
+    res.setHeader("Set-Cookie", [...current, cookie]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [String(current), cookie]);
+}
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  if (!header) return {};
+  return header
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((all, item) => {
+      const eq = item.indexOf("=");
+      if (eq < 0) return all;
+      const key = item.slice(0, eq).trim();
+      const value = item.slice(eq + 1).trim();
+      all[key] = decodeURIComponent(value);
+      return all;
+    }, {});
+}
+
+function redirect(res: ServerResponse, location: string): void {
+  res.writeHead(302, { Location: location });
+  res.end();
 }

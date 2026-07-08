@@ -12,30 +12,12 @@ const loginResult = document.querySelector("#login-result");
 let count = 0;
 
 loadTiers();
+loadSession();
 
 googleLogin.addEventListener("click", async () => {
   loginResult.className = "login-result";
-  loginResult.textContent = "Checking access...";
-
-  try {
-    const response = await fetch("/api/v1/auth/google-demo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: document.querySelector("#login-email").value.trim(),
-        name: document.querySelector("#login-name").value.trim()
-      })
-    });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error || "login failed");
-    loginResult.classList.add(json.status);
-    loginResult.textContent =
-      json.status === "waitlisted"
-        ? `Waitlist #${json.waitlistNumber}. ${json.message}`
-        : `Access granted. ${json.message}`;
-  } catch (error) {
-    loginResult.textContent = `Could not sign in: ${error.message}`;
-  }
+  loginResult.textContent = "Redirecting to Google...";
+  window.location.href = "/api/v1/auth/google/start";
 });
 
 createKey.addEventListener("click", async () => {
@@ -121,4 +103,39 @@ async function loadTiers() {
       `
     )
     .join("");
+}
+
+async function loadSession() {
+  const authStatus = new URLSearchParams(window.location.search).get("auth");
+  if (authStatus === "error" || authStatus === "state" || authStatus === "config" || authStatus === "email") {
+    loginResult.className = "login-result waitlisted";
+    loginResult.textContent = "Google sign-in did not complete. Please try again.";
+  }
+
+  try {
+    const response = await fetch("/api/v1/auth/session");
+    const json = await response.json();
+    if (!json.configured) {
+      loginResult.className = "login-result waitlisted";
+      loginResult.textContent = "Google auth not configured on server yet.";
+      return;
+    }
+    if (!json.signedIn) {
+      if (!authStatus) loginResult.textContent = "Not signed in yet.";
+      return;
+    }
+    document.querySelector("#login-email").value = json.user.email;
+    document.querySelector("#login-name").value = json.user.name;
+    loginResult.className = `login-result ${json.user.status}`;
+    loginResult.textContent =
+      json.user.status === "waitlisted"
+        ? `Waitlist #${json.user.waitlistNumber}. ${json.message}`
+        : `Access granted. ${json.message}`;
+
+    // Clean auth query params after callback so refresh stays clean.
+    if (authStatus) window.history.replaceState({}, "", window.location.pathname);
+  } catch (error) {
+    loginResult.className = "login-result waitlisted";
+    loginResult.textContent = `Could not load session: ${error.message}`;
+  }
 }
