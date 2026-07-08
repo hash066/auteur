@@ -57,6 +57,17 @@ For local development without auth:
 MOTION_DIRECTOR_DEV_ALLOW_NO_AUTH=1 npm run dev:api
 ```
 
+## Vercel Deploy
+
+Deploy from the repository root, not `apps/api`.
+
+- Root Directory: leave blank / repo root
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: `apps/studio/public`
+
+The API routes are served from the root `api/` Vercel functions and reuse the same handler as the local server.
+
 ## Product Tiers
 
 - **Open Source**: local skill, local API, BYO keys.
