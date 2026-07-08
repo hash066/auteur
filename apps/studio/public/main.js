@@ -6,32 +6,22 @@ const tiers = document.querySelector("#tiers");
 const createKey = document.querySelector("#create-key");
 const generatedKey = document.querySelector("#generated-key");
 const mcpConfig = document.querySelector("#mcp-config");
-const googleLogin = document.querySelector("#google-login");
-const loginResult = document.querySelector("#login-result");
+const logoutBtn = document.querySelector("#logout-btn");
+const sessionStatus = document.querySelector("#session-status");
 
 let count = 0;
 
+await ensureSession();
 loadTiers();
-loadSession();
-
-googleLogin.addEventListener("click", async () => {
-  loginResult.className = "login-result";
-  loginResult.textContent = "Redirecting to Google...";
-  window.location.href = "/api/v1/auth/google/start";
-});
 
 createKey.addEventListener("click", async () => {
   generatedKey.value = "Creating...";
   mcpConfig.value = "";
 
-  const adminKey = document.querySelector("#api-key").value.trim();
-  const headers = { "Content-Type": "application/json" };
-  if (adminKey) headers.Authorization = `Bearer ${adminKey}`;
-
   try {
     const response = await fetch("/api/v1/api-keys", {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: document.querySelector("#key-name").value.trim(),
         tier: document.querySelector("#key-tier").value
@@ -46,6 +36,11 @@ createKey.addEventListener("click", async () => {
     generatedKey.value = "";
     mcpConfig.value = `Could not create key: ${error.message}`;
   }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await fetch("/api/v1/auth/logout", { method: "POST" });
+  window.location.href = "/";
 });
 
 form.addEventListener("submit", async (event) => {
@@ -105,37 +100,26 @@ async function loadTiers() {
     .join("");
 }
 
-async function loadSession() {
+async function ensureSession() {
   const authStatus = new URLSearchParams(window.location.search).get("auth");
-  if (authStatus === "error" || authStatus === "state" || authStatus === "config" || authStatus === "email") {
-    loginResult.className = "login-result waitlisted";
-    loginResult.textContent = "Google sign-in did not complete. Please try again.";
-  }
-
   try {
     const response = await fetch("/api/v1/auth/session");
     const json = await response.json();
     if (!json.configured) {
-      loginResult.className = "login-result waitlisted";
-      loginResult.textContent = "Google auth not configured on server yet.";
+      window.location.href = "/?auth=config";
       return;
     }
     if (!json.signedIn) {
-      if (!authStatus) loginResult.textContent = "Not signed in yet.";
+      window.location.href = "/";
       return;
     }
-    document.querySelector("#login-email").value = json.user.email;
-    document.querySelector("#login-name").value = json.user.name;
-    loginResult.className = `login-result ${json.user.status}`;
-    loginResult.textContent =
+    sessionStatus.textContent =
       json.user.status === "waitlisted"
-        ? `Waitlist #${json.user.waitlistNumber}. ${json.message}`
-        : `Access granted. ${json.message}`;
+        ? `waitlist #${json.user.waitlistNumber}`
+        : `signed in: ${json.user.email}`;
 
-    // Clean auth query params after callback so refresh stays clean.
     if (authStatus) window.history.replaceState({}, "", window.location.pathname);
   } catch (error) {
-    loginResult.className = "login-result waitlisted";
-    loginResult.textContent = `Could not load session: ${error.message}`;
+    window.location.href = "/?auth=error";
   }
 }

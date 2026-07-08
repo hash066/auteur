@@ -111,7 +111,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
         maxAgeSeconds: 60 * 60 * 24 * 30
       });
       clearCookie(res, "md_oauth_state");
-      redirect(res, "/?auth=ok");
+      redirect(res, "/dashboard.html?auth=ok");
       return;
     }
 
@@ -276,7 +276,13 @@ function authorized(req: IncomingMessage): boolean {
 function dashboardAuthorized(req: IncomingMessage): boolean {
   if (process.env.MOTION_DIRECTOR_DEV_ALLOW_NO_AUTH === "1") return true;
   const adminKey = process.env.MOTION_DIRECTOR_ADMIN_KEY || process.env.MOTION_DIRECTOR_API_KEY;
-  return Boolean(adminKey && req.headers.authorization === `Bearer ${adminKey}`);
+  if (adminKey && req.headers.authorization === `Bearer ${adminKey}`) return true;
+  const authSecret = process.env.AUTH_SECRET;
+  if (!authSecret) return false;
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.md_session;
+  if (!token) return false;
+  return Boolean(readSessionToken(token, authSecret));
 }
 
 function setCors(res: ServerResponse): void {

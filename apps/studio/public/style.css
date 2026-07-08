@@ -69,6 +69,12 @@ h2 {
   white-space: nowrap;
 }
 
+.top-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1.3fr 0.85fr 0.85fr;

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Motion Director Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">MOTION DIRECTOR</p>
+          <h1>Boring dashboard, serious renders.</h1>
+        </div>
+        <div class="top-actions">
+          <span id="session-status" class="status">checking session</span>
+          <button id="logout-btn" type="button">Logout</button>
+        </div>
+      </header>
+
+      <section class="grid">
+        <section class="panel span-3 key-panel">
+          <div class="panel-head">
+            <div>
+              <h2>API keys</h2>
+              <p class="muted">Signed-in users can create keys and connect API or MCP without manual admin auth input.</p>
+            </div>
+            <button id="create-key" type="button">Create API key</button>
+          </div>
+          <div class="two key-form">
+            <label>
+              Key name
+              <input id="key-name" value="My launch agent">
+            </label>
+            <label>
+              Tier
+              <select id="key-tier">
+                <option value="open-source">Open Source</option>
+                <option value="starter">Starter</option>
+                <option value="creator">Creator</option>
+                <option value="pro">Pro</option>
+              </select>
+            </label>
+          </div>
+          <div class="copy-grid">
+            <label>
+              New key
+              <input id="generated-key" readonly placeholder="Create a key first">
+            </label>
+            <label>
+              MCP config
+              <textarea id="mcp-config" readonly placeholder="MCP config appears after key creation"></textarea>
+            </label>
+          </div>
+        </section>
+
+        <form id="job-form" class="panel span-2">
+          <div class="panel-head">
+            <h2>New launch film</h2>
+            <button type="submit">Generate storyboard</button>
+          </div>
+
+          <label>
+            API key
+            <input id="api-key" type="password" placeholder="md_live_..." autocomplete="off">
+          </label>
+
+          <div class="two">
+            <label>
+              Product
+              <input id="product" value="Cerberus">
+            </label>
+            <label>
+              Duration
+              <input id="duration" type="number" value="28" min="18" max="120">
+            </label>
+          </div>
+
+          <label>
+            Repo path
+            <input id="repo-path" value="E:/10w10p/Cerberus">
+          </label>
+
+          <label>
+            Vibe
+            <input id="vibe" value="mysterious premium tech, fast beat cuts, real screen motion">
+          </label>
+
+          <label>
+            Captures, one per line
+            <textarea id="captures">E:/10w10p/Cerberus/strict-launch-film/actual-captures/overview.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/devices.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/audio.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/workloads.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/metrics.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/wallet.png
+E:/10w10p/Cerberus/strict-launch-film/actual-captures/conflicts.png</textarea>
+          </label>
+        </form>
+
+        <section class="panel">
+          <h2>Usage</h2>
+          <div class="metric">
+            <span>Storyboards</span>
+            <strong id="storyboards">0</strong>
+          </div>
+          <div class="metric">
+            <span>Audio minutes</span>
+            <strong>BYO</strong>
+          </div>
+          <div class="metric">
+            <span>Render queue</span>
+            <strong>stub</strong>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>How users plug in</h2>
+          <p><strong>API:</strong> create a key, send it as a bearer token, call `/api/v1/generate-launch-film`.</p>
+          <p><strong>MCP:</strong> paste the generated config into Cursor, Claude Desktop, or another MCP client.</p>
+        </section>
+
+        <section class="panel">
+          <h2>Tiers</h2>
+          <div id="tiers" class="tiers"></div>
+        </section>
+
+        <section class="panel span-3">
+          <div class="panel-head">
+            <h2>Latest storyboard</h2>
+            <span id="job-id" class="muted">none yet</span>
+          </div>
+          <pre id="output">Click generate and use your API key.</pre>
+        </section>
+      </section>
+    </main>
+    <script src="/main.js"></script>
+  </body>
+</html>
